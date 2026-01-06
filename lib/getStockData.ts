@@ -35,6 +35,7 @@ function convertStringToNum(value: string | number | null) {
 
 export async function getCompleteStockData(symbol: string) : Promise<Partial<StockResponse> | undefined> {
     const cacheKey = `${symbol}_complete`;
+    
   const cached = getCache<Partial<Stock>>(cacheKey);
   if (cached) {
     console.log(`Using cached data for ${symbol}`);

@@ -136,7 +136,7 @@ export default function PortfolioTable({ stocks }: PortfolioTableProps) {
                 className="p-2 hover:bg-white/50 rounded-lg transition-colors group"
                 title={`View ${sector} sector charts`}
               >
-                <ChartBarIcon className="h-5 w-5 text-gray-600 group-hover:text-purple-600" />
+                <ChartBarIcon className="h-6 w-5 text-gray-600 group-hover:text-purple-600" />
               </button>
             </div>
             <div className="text-sm text-gray-600">
