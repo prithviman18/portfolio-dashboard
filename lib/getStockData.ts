@@ -4,23 +4,6 @@ import { mockStoks } from "./data/mockData";
 import { Stock, StockResponse } from "./types";
 import { getStockQuote } from "./yahoo";
 
-interface yahooData {
-  regularMarketPrice: number;
-  trailingPE: number;
-  epsTrailingTwelveMonths: number;
-  marketCap: number;
-  bookValue: number;
-  priceToBook: number;
-  symbol: string;
-}
-
-interface ScreenerData {
-  topRatios: Record<string, string>;
-  profitLossRows: Record<string, string[]>;
-  cashFlowRows: Record<string, string[]>;
-  balanceSheetRows: Record<string, string>;
-}
-
 function convertStringToNum(value: string | number | null) {
   if (!value) return 0;
   if (typeof value === "number") return value;
@@ -33,9 +16,23 @@ function convertStringToNum(value: string | number | null) {
   return 0;
 }
 
-export async function getCompleteStockData(symbol: string) : Promise<Partial<StockResponse> | undefined> {
-    const cacheKey = `${symbol}_complete`;
-    
+function isMarketOpen(): boolean {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const day = now.getDay();
+
+  if (day === 0 || day === 6) return false;
+
+  const time = hours * 60 + minutes;
+  return time >= 555 && time <= 930;
+}
+export async function getCompleteStockData(
+  symbol: string
+): Promise<Partial<StockResponse> | undefined> {
+  // const ENABLE_PRICE_SIMULATION = true;
+  const cacheKey = `${symbol}_complete`;
+
   const cached = getCache<Partial<Stock>>(cacheKey);
   if (cached) {
     console.log(`Using cached data for ${symbol}`);
@@ -47,33 +44,41 @@ export async function getCompleteStockData(symbol: string) : Promise<Partial<Sto
       getStockQuote(symbol),
       getScreenerData(symbol),
     ]);
-    
+
     const yfinanceData =
       yahooRes.status === "fulfilled" ? yahooRes.value : null;
-    
+
     const screenerData =
       screenerRes.status === "fulfilled" ? screenerRes.value : null;
     if (!yfinanceData) {
       throw new Error("Yahoo data missing");
     }
-    
+
     if (!screenerData) {
       console.warn(`Screener data missing for ${symbol}`);
     }
-    const originalStockData = mockStoks.find(s => s.nseBse === symbol);
-    if(!originalStockData){
+    const originalStockData = mockStoks.find((s) => s.nseBse === symbol);
+    if (!originalStockData) {
       throw new Error("Original stock data not found");
     }
-    const presentVal = (yfinanceData.regularMarketPrice || 0) * originalStockData.quantity;
-    const investment = originalStockData.purchasePrice * originalStockData.quantity
+    const presentVal =
+      (yfinanceData.regularMarketPrice || 0) * originalStockData.quantity;
+    const basePrice = yfinanceData.regularMarketPrice || 0;
+
+    // const simulatedPrice =
+    //   ENABLE_PRICE_SIMULATION && !isMarketOpen()
+    //     ? basePrice * (1 + (Math.random() - 0.5) / 100) // ±0.5%
+    //     : basePrice;
+
+    // const presentVal = simulatedPrice * originalStockData.quantity;
+    const investment =
+      originalStockData.purchasePrice * originalStockData.quantity;
     const peRatio =
-  screenerData?.topRatios?.["P/E"] != null
-    ? convertStringToNum(screenerData.topRatios["P/E"])
-    : yfinanceData.trailingPE || 0;
+      screenerData?.topRatios?.["P/E"] != null
+        ? convertStringToNum(screenerData.topRatios["P/E"])
+        : yfinanceData.trailingPE || 0;
     const gainLossPercent =
-  investment > 0
-    ? ((presentVal - investment) / investment) * 100
-    : 0;
+      investment > 0 ? ((presentVal - investment) / investment) * 100 : 0;
     // const netProfitRow = screenerData.profitLossRows["Net Profit +"];
     // const latestNetProfit = convertStringToNum(netProfitRow[netProfitRow.length - 1]);
     const completeStockData = {
@@ -84,13 +89,16 @@ export async function getCompleteStockData(symbol: string) : Promise<Partial<Sto
       portfolioPercent: originalStockData.portfolioPercent,
       nseBSE: originalStockData.nseBse,
       cmp: yfinanceData.regularMarketPrice || 0, // current market price
-      presentValue: (yfinanceData.regularMarketPrice || 0) * originalStockData.quantity,
+      presentValue:
+        (yfinanceData.regularMarketPrice || 0) * originalStockData.quantity,
+      //       cmp: simulatedPrice,
+      // presentValue: presentVal,
       gainLoss: presentVal - investment,
       peRatio: peRatio,
-      latestEarnings: yfinanceData.epsTrailingTwelveMonths ,
+      latestEarnings: yfinanceData.epsTrailingTwelveMonths,
       gainLossPercent: gainLossPercent,
       sector: originalStockData.sector,
-    }
+    };
     setCache(cacheKey, completeStockData);
     return completeStockData;
   } catch (error) {
@@ -98,5 +106,3 @@ export async function getCompleteStockData(symbol: string) : Promise<Partial<Sto
     return undefined;
   }
 }
-
-
